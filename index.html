@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lienzo Colaborativo</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f0f0;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            max-width: 800px;
+            margin: 2rem auto;
+            padding: 2rem;
+            background-color: white;
+            border-radius: 0.5rem;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 1.5rem;
+            color: #2d3748;
+        }
+        #textCanvas {
+            width: 100%;
+            height: 300px;
+            border: 1px solid #cbd5e0;
+            border-radius: 0.375rem;
+            padding: 0.75rem;
+            margin-bottom: 1.5rem;
+            font-size: 1rem;
+            line-height: 1.5rem;
+            resize: vertical;
+            box-sizing: border-box;
+        }
+        #textCanvas:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+        }
+        #messageDisplay {
+            text-align: center;
+            margin-bottom: 1.5rem;
+            color: #1a202c;
+            font-size: 1rem;
+        }
+        .button-group {
+            display: flex;
+            justify-content: center;
+            gap: 0.75rem;
+            margin-bottom: 1.5rem;
+        }
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.375rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            border: none;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+        .btn-primary {
+            background-color: #4caf50;
+            color: white;
+        }
+        .btn-primary:hover {
+            background-color: #45a049;
+        }
+        .btn-secondary {
+            background-color: #f0f0f0;
+            color: #333;
+        }
+        .btn-secondary:hover {
+            background-color: #e0e0e0;
+        }
+        #disconnectButton {
+            background-color: #f44336;
+            color: white;
+        }
+        #disconnectButton:hover {
+            background-color: #d32f2f;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Lienzo de Texto Colaborativo</h1>
+        <textarea id="textCanvas" placeholder="Escribe aquí para colaborar..."></textarea>
+        <div id="messageDisplay">Conectando...</div>
+        <div class="button-group">
+            <button id="connectButton" class="btn btn-primary">Conectar</button>
+            <button id="disconnectButton" class="btn btn-secondary">Desconectar</button>
+        </div>
+    </div>
+
+    <script>
+        const textCanvas = document.getElementById('textCanvas');
+        const messageDisplay = document.getElementById('messageDisplay');
+        const connectButton = document.getElementById('connectButton');
+        const disconnectButton = document.getElementById('disconnectButton');
+
+        let ws;
+        let reconnectInterval = null;
+        const serverUrl = window.location.origin.replace(/^http/, 'ws');
+
+        function connectWebSocket() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                return;
+            }
+
+            ws = new WebSocket(serverUrl);
+
+            ws.onopen = () => {
+                messageDisplay.textContent = 'Conectado al servidor!';
+                clearInterval(reconnectInterval);
+                reconnectInterval = null;
+                // Solicitar el texto actual al servidor al conectar
+                ws.send(JSON.stringify({ type: 'getText' }));
+            };
+
+            ws.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.type === 'text') {
+                        textCanvas.value = data.content;
+                    } else if (data.type === 'update') {
+                        textCanvas.value = data.content;
+                    } else if (data.type === 'connectionCount') {
+                        messageDisplay.textContent = `Conectado al servidor! Usuarios conectados: ${data.count}`;
+                    }
+                } catch (error) {
+                    console.error('Error al procesar el mensaje:', error);
+                }
+            };
+
+            ws.onclose = () => {
+                messageDisplay.textContent = 'Desconectado del servidor!';
+                if (!reconnectInterval) {
+                    reconnectInterval = setInterval(connectWebSocket, 3000);
+                }
+            };
+
+            ws.onerror = (error) => {
+                console.error('Error de WebSocket:', error);
+            };
+        }
+
+        function sendText() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'text', content: textCanvas.value }));
+            }
+        }
+
+        function disconnectWebSocket() {
+            if (ws) {
+                ws.close();
+            }
+            clearInterval(reconnectInterval);
+            reconnectInterval = null;
+            messageDisplay.textContent = 'Desconectado.';
+        }
+
+        textCanvas.addEventListener('input', sendText);
+        connectButton.addEventListener('click', connectWebSocket);
+        disconnectButton.addEventListener('click', disconnectWebSocket);
+
+        connectWebSocket();
+    </script>
+</body>
+</html>
